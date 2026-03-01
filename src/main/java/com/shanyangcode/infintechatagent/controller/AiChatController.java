@@ -13,7 +13,10 @@ public class AiChatController {
     private AiChat aiChat;
 
     @GetMapping("/chat")
-    public String chat(String prompt) {
-        return aiChat.chat(prompt);
+    public String chat(String sessionId, String prompt) {
+        return aiChat.chat(sessionId, prompt);
     }
 }
+
+
+
