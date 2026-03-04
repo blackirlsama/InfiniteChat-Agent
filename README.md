@@ -1,4 +1,4 @@
-# InfiniteChat-Agent（千言・AI 智能助手）
+# ByteCoach（后端面试智能体系统）
 
 ## 项目简介
 
