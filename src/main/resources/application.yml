@@ -1,6 +1,13 @@
 spring:
   application:
     name: InfiniteChat-Agent
+  data:
+    redis:
+      host: 120.53.45.251
+      port: 6379
+      password: e65K4t8w2
+      ttl: 3600
+      timeout: 30000
 
 server:
   port: 10010

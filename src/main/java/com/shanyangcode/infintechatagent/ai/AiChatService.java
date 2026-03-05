@@ -1,11 +1,8 @@
 package com.shanyangcode.infintechatagent.ai;
 
-import java.util.List;
 
-
-
-import com.shanyangcode.infintechatagent.ai.AiChat;
 import com.shanyangcode.infintechatagent.tool.TimeTool;
+import dev.langchain4j.community.store.memory.chat.redis.RedisChatMemoryStore;
 import dev.langchain4j.data.document.Document;
 import dev.langchain4j.data.document.loader.FileSystemDocumentLoader;
 import dev.langchain4j.data.segment.TextSegment;
@@ -20,6 +17,8 @@ import jakarta.annotation.Resource;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.util.List;
+
 @Configuration
 public class AiChatService {
 
@@ -32,6 +31,9 @@ public class AiChatService {
     @Resource
     private McpToolProvider mcpToolProvider;
 
+    @Resource
+    private RedisChatMemoryStore redisChatMemoryStore;
+
     @Bean
     public AiChat aiChat() {
         List<Document> documents = FileSystemDocumentLoader.loadDocuments("src/main/resources/docs");
@@ -39,7 +41,12 @@ public class AiChatService {
 
         return AiServices.builder(AiChat.class)
                 .chatModel(chatModel)
-                .chatMemoryProvider(memoryId -> MessageWindowChatMemory.withMaxMessages(10))
+                .chatMemoryProvider(memoryId -> MessageWindowChatMemory
+                        .builder()
+                        .id(memoryId)
+                        .chatMemoryStore(redisChatMemoryStore)
+                        .maxMessages(20)
+                        .build())
                 .contentRetriever(EmbeddingStoreContentRetriever.from(embeddingStore))
                 .tools(new TimeTool())
                 .toolProvider(mcpToolProvider)
