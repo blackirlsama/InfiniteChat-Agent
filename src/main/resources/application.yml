@@ -24,9 +24,13 @@ server:
   servlet:
     context-path: /api
 
+# 关键修复：增加Rerank日志级别，便于排查问题
 logging:
   level:
     dev.langchain4j.mcp: ERROR
+    com.shanyangcode.infintechatagent.rag: INFO  # Rerank相关包日志级别
+    org.springframework.web: WARN
+    com.fasterxml.jackson: WARN
 
 pgvector:
   database: dp
@@ -35,7 +39,6 @@ pgvector:
   user: root
   password: e65K4t7z1
   table: dp_embedding
-
 
 langchain4j:
   community:
@@ -49,11 +52,18 @@ langchain4j:
       embedding-model:
         model-name: text-embedding-v4
         api-key: sk-e784271659ed44feb10e4dd7cb69762b
+      rerank-model:
+        model-name: qwen3-rerank  # 修复：使用正确的文本重排序模型
+        api-key: sk-e784271659ed44feb10e4dd7cb69762b
+        enabled: true
 
+# 关键新增：启用Rerank启动验证
+rerank:
+  test:
+    enabled: true
 
 bigmodel:
   api-key: 12cc950622344290bebffb9de8eff3d2.ttihjvInDu60Qm7P
-
 
 rag:
   docs-path: C:\Users\Administrator\IdeaProjects\InfiniteChat-Agent\src\main\resources\docs
