@@ -29,6 +29,7 @@ logging:
   level:
     dev.langchain4j.mcp: ERROR
     com.shanyangcode.infintechatagent.rag: INFO  # Rerank相关包日志级别
+    com.shanyangcode.infintechatagent.memory: DEBUG # 新增：会话记忆压缩日志
     org.springframework.web: WARN
     com.fasterxml.jackson: WARN
 
@@ -76,3 +77,22 @@ management:
   endpoint:
     health:
       show-details: always
+
+# 会话记忆压缩核心配置（完整补充）
+chat:
+  memory:
+    max-messages: 20                # 新增：触发压缩的最大消息条数
+    compression:
+      token-threshold: 6000         # 新增：触发压缩的Token阈值
+      recent-rounds: 5              # 保留最近5轮完整对话
+      recent-token-limit: 2000      # 最近对话Token上限
+      summary-token-limit: 500      # 新增：摘要Token上限
+      # 新增：摘要提示词（适配通义千问，保留关键信息）
+      summary-prompt: "请将以下对话历史压缩为简洁摘要，严格控制在{tokenLimit} tokens以内，必须保留用户偏好、重要决策、核心诉求等关键信息，去除无意义寒暄：\n{messages}"
+      fallback-recent-rounds: 10    # 新增：压缩失败时降级保留的轮数
+    redis:
+      ttl-seconds: 3600             # 新增：会话记忆Redis过期时间（复用spring.redis.ttl也可，这里显式配置）
+      lock:
+        expire-seconds: 5           # 新增：分布式锁过期时间
+        retry-times: 3              # 新增：锁获取重试次数
+        retry-interval-ms: 100      # 新增：锁重试间隔（毫秒）

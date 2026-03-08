@@ -27,19 +27,21 @@ public class RagDataLoader implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        log.info("RAG - 开始加载本地基础文档，路径: {}", docsPath);
+        log.info("=== RAG文档加载启动 ===");
+        log.info("📂 文档路径: {}", docsPath);
         try {
-
             List<Document> documents = FileSystemDocumentLoader.loadDocuments(docsPath);
 
             if (!documents.isEmpty()) {
+                log.info("📚 发现{}个文档，开始向量化...", documents.size());
                 embeddingStoreIngestor.ingest(documents);
-                log.info("RAG - 本地文档加载完成，共加载 {} 个文档", documents.size());
+                log.info("✅ RAG文档加载完成 - 共处理{}个文档", documents.size());
             } else {
-                log.warn("RAG - 指定路径下未发现文档");
+                log.warn("⚠️ 未发现任何文档，请检查路径: {}", docsPath);
             }
         } catch (Exception e) {
-            log.error("RAG - 加载本地文档失败", e);
+            log.error("❌ RAG文档加载失败", e);
         }
+        log.info("========================");
     }
 }

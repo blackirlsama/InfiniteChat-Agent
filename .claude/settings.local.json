@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(mvn compile:*)",
-      "Bash(mvn clean:*)"
+      "Bash(mvn clean:*)",
+      "Bash(xargs jar:*)"
     ]
   }
 }

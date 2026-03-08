@@ -17,13 +17,16 @@ public class ReRankingContentRetriever implements ContentRetriever {
     private final ContentRetriever baseRetriever;
     private final QwenRerankClient rerankClient;
     private final int finalTopN;
+    private final QueryPreprocessor queryPreprocessor;
 
     public ReRankingContentRetriever(ContentRetriever baseRetriever,
                                      QwenRerankClient rerankClient,
-                                     int finalTopN) {
+                                     int finalTopN,
+                                     QueryPreprocessor queryPreprocessor) {
         this.baseRetriever = Objects.requireNonNull(baseRetriever, "baseRetriever不能为空");
         this.rerankClient = Objects.requireNonNull(rerankClient, "rerankClient不能为空");
-        this.finalTopN = finalTopN > 0 ? finalTopN : 3; // 默认值，避免无效topN
+        this.finalTopN = finalTopN > 0 ? finalTopN : 3;
+        this.queryPreprocessor = queryPreprocessor;
     }
 
     @Override
@@ -33,7 +36,16 @@ public class ReRankingContentRetriever implements ContentRetriever {
             return List.of();
         }
 
-        log.info("📥 [RAG检索] 开始 - 查询: '{}'", query.text().substring(0, Math.min(50, query.text().length())));
+        String originalQuery = query.text();
+        String processedQuery = originalQuery;
+
+        // 查询预处理
+        if (queryPreprocessor != null) {
+            processedQuery = queryPreprocessor.preprocess(originalQuery);
+            query = Query.from(processedQuery);
+        }
+
+        log.info("📥 [RAG检索] 开始 - 查询: '{}'", processedQuery.substring(0, Math.min(50, processedQuery.length())));
 
         // 第一阶段：向量召回（粗排）
         log.info("🔍 [阶段1-粗排] 向量召回中...");
