@@ -6,6 +6,7 @@ import com.shanyangcode.infintechatagent.Monitor.MonitorContextHolder;
 import com.shanyangcode.infintechatagent.ai.AiChat;
 import com.shanyangcode.infintechatagent.model.dto.ChatRequest;
 import com.shanyangcode.infintechatagent.model.dto.KnowledgeRequest;
+import com.shanyangcode.infintechatagent.orchestrator.SimpleOrchestrator;
 import dev.langchain4j.data.document.Document;
 import dev.langchain4j.data.document.Metadata;
 import dev.langchain4j.store.embedding.EmbeddingStoreIngestor;
@@ -23,36 +24,61 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 
+/**
+ * AI聊天控制器
+ * 提供聊天、流式聊天和知识插入等功能
+ */
 @RestController
 @Slf4j
 public class AiChatController {
 
     @Resource
-    private AiChat aiChat;
-
+    private AiChat aiChat; // AI聊天服务接口
 
     @Resource
-    private EmbeddingStoreIngestor embeddingStoreIngestor;
+    private SimpleOrchestrator simpleOrchestrator; // 多Agent协调器
+
+    @Resource
+    private EmbeddingStoreIngestor embeddingStoreIngestor; // 向量数据库导入服务
 
     @Value("${rag.docs-path}")
-    private String docsPath;
+    private String docsPath; // 文档存储路径配置
 
-    private final  String  TARGET_FILENAME = "InfiniteChat.md";
+    private final  String  TARGET_FILENAME = "InfiniteChat.md"; // 目标文件名常量
 
+    /**
+     * 聊天接口（已注释）
+     * @param sessionId 会话ID
+     * @param prompt 用户输入
+     * @return 聊天回复
+     */
 //    @GetMapping("/chat")
 //    public String chat(String sessionId, String prompt) {
 //        return aiChat.chat(sessionId, prompt);
 //    }
 
+    /**
+     * POST方式聊天接口
+     * @param chatRequest 包含会话ID和用户输入的请求对象
+     * @return 聊天回复
+     */
     @PostMapping("/chat")
     public String chat(@RequestBody ChatRequest chatRequest) {
+        // 设置监控上下文
         MonitorContextHolder.setContext(MonitorContext.builder().userId(chatRequest.getUserId()).sessionId(chatRequest.getSessionId()).build());
+        // 执行聊天并获取结果
         String chat = aiChat.chat(chatRequest.getSessionId(), chatRequest.getPrompt());
+        // 清除监控上下文
         MonitorContextHolder.clearContext();
         return chat;
     }
 
 
+    /**
+     * 流式聊天接口（已注释）
+     * @param chatRequest 包含会话ID和用户输入的请求对象
+     * @return 流式字符串响应
+     */
 //    @PostMapping("/streamChat")
 //    public Flux<String> streamChat(@RequestBody ChatRequest chatRequest) {
 //        return aiChat.streamChat(chatRequest.getSessionId(), chatRequest.getPrompt());
@@ -61,25 +87,60 @@ public class AiChatController {
 
 
 
+    /**
+     * POST方式流式聊天接口
+     * @param chatRequest 包含会话ID和用户输入的请求对象
+     * @return 流式字符串响应
+     */
     @PostMapping("/streamChat")
     public Flux<String> streamChat(@RequestBody ChatRequest chatRequest) {
+        // 构建监控上下文
         MonitorContext context = MonitorContext.builder()
                 .userId(chatRequest.getUserId())
                 .sessionId(chatRequest.getSessionId())
                 .build();
 
+        // 使用defer延迟执行，确保在订阅时才设置上下文
         return Flux.defer(() -> {
+            // 设置监控上下文
             MonitorContextHolder.setContext(context);
+            // 执行流式聊天，并在完成时清除上下文
             return aiChat.streamChat(chatRequest.getSessionId(), chatRequest.getPrompt())
                     .doFinally(signal -> MonitorContextHolder.clearContext());
         });
     }
 
 
+    /**
+     * 多Agent协同聊天接口（新增）
+     * @param chatRequest 包含会话ID和用户输入的请求对象
+     * @return 聊天回复
+     */
+    @PostMapping("/multiAgentChat")
+    public String multiAgentChat(@RequestBody ChatRequest chatRequest) {
+        // 设置监控上下文
+        MonitorContextHolder.setContext(MonitorContext.builder()
+                .userId(chatRequest.getUserId())
+                .sessionId(chatRequest.getSessionId())
+                .build());
 
+        // 调用多Agent协调器处理
+        String result = simpleOrchestrator.process(chatRequest.getSessionId(), chatRequest.getPrompt());
+
+        // 清除监控上下文
+        MonitorContextHolder.clearContext();
+        return result;
+    }
+
+
+    /**
+     * 插入知识接口
+     * @param knowledgeRequest 包含问题和答案的知识请求对象
+     * @return 操作结果字符串
+     */
     @PostMapping("/insert")
     public String insertKnowledge(@RequestBody KnowledgeRequest knowledgeRequest) {
-        // 1. 格式化内容
+        // 1. 格式化内容为Q&A格式
         String formattedContent = String.format("### Q：%s\n\nA：%s", knowledgeRequest.getQuestion(), knowledgeRequest.getAnswer());
 
         // 2. 写入物理文件 (InfiniteChat.md)
@@ -108,6 +169,12 @@ public class AiChatController {
 
 
 
+    /**
+     * 向文件追加内容（线程安全）
+     * @param content 要追加的内容
+     * @param sourceName 源文件名
+     * @return 是否写入成功
+     */
     private synchronized boolean appendToFile(String content, String sourceName) {
         try {
             // 拼接完整路径

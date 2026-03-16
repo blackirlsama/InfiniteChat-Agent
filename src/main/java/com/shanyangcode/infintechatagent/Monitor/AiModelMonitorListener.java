@@ -28,50 +28,53 @@ public class AiModelMonitorListener implements ChatModelListener {
     @Resource
     private AiModelMetricsCollector aiModelMetricsCollector;
 
-    @Resource
-    private ObservabilityLogger observabilityLogger;
-
 
     @Override
     public void onRequest(ChatModelRequestContext requestContext) {
 
         requestContext.attributes().put(START_TIME_KEY, Instant.now());
+        // 从监控上下文中获取信息
         MonitorContext context = MonitorContextHolder.getContext();
 
         if (context == null) {
+            // 记录错误日志
             log.error("MonitorContext is null when processing request");
             return;
         }
         String userId = context.getUserId() != null ? context.getUserId().toString() : "unknown";
         String sessionId = context.getSessionId() != null ? context.getSessionId().toString() : "unknown";
         requestContext.attributes().put(MONITOR_CONTEXT_KEY, context);
+        // 获取模型名称
         String modelName = requestContext.chatRequest().modelName();
 
-        observabilityLogger.logRequest("LLM_REQUEST", "model", modelName);
+        log.info(">>> AI请求开始 | 用户: {} | 会话: {} | 模型: {}", userId, sessionId, modelName);
+        // 记录请求指标
         aiModelMetricsCollector.recordRequest(userId, sessionId, modelName, "started");
     }
 
     @Override
     public void onResponse(ChatModelResponseContext responseContext) {
         String modelName = responseContext.chatResponse().metadata().modelName();
+        // 从属性中获取监控信息（由 onRequest 方法存储）
         Map<Object, Object> attributes = responseContext.attributes();
+        // 1. 从监控上下文中获取信息
         MonitorContext context = (MonitorContext) attributes.get(MONITOR_CONTEXT_KEY);
 
         if (context == null) {
             log.warn("监控上下文丢失，无法记录响应指标 - Model: {}", responseContext.chatResponse().modelName());
             return;
         }
-
+        
         String userId = context.getUserId().toString();
         String sessionId = context.getSessionId().toString();
+        // 2. 计算耗时
         Duration durationMs = calculateDuration(attributes);
+
+        // 3. 获取 Token 使用情况
         TokenUsage tokenUsage = responseContext.chatResponse().metadata().tokenUsage();
 
-        observabilityLogger.logSuccess("LLM_RESPONSE", durationMs.toMillis(),
-            "model", modelName,
-            "input_tokens", tokenUsage != null ? tokenUsage.inputTokenCount() : 0,
-            "output_tokens", tokenUsage != null ? tokenUsage.outputTokenCount() : 0);
-
+        // 4. 打印格式化日志
+        log.info("<<< AI请求成功 | 用户: {} | 会话: {} | 模型: {} | 耗时: {}ms | Tokens: [In:{}, Out:{}, Total:{}]", userId, sessionId, modelName, durationMs.toMillis(), tokenUsage != null ? tokenUsage.inputTokenCount() : 0, tokenUsage != null ? tokenUsage.outputTokenCount() : 0, tokenUsage != null ? tokenUsage.totalTokenCount() : 0);
         aiModelMetricsCollector.recordRequest(userId, sessionId, modelName, "success");
         aiModelMetricsCollector.recordResponseTime(userId, sessionId, modelName, durationMs);
 
@@ -85,10 +88,12 @@ public class AiModelMonitorListener implements ChatModelListener {
     @Override
     public void onError(ChatModelErrorContext errorContext) {
         MonitorContext context = MonitorContextHolder.getContext();
+
         Map<Object, Object> attributes = errorContext.attributes();
         Duration durationMs = calculateDuration(attributes);
 
         if (context == null) {
+            // 尝试从 attributes 补救
             context = (MonitorContext) errorContext.attributes().get(MONITOR_CONTEXT_KEY);
         }
 
@@ -96,14 +101,14 @@ public class AiModelMonitorListener implements ChatModelListener {
             log.warn("监控上下文丢失，无法记录错误指标 - Error: {}", errorContext.error().getMessage());
             return;
         }
-
+        
         String userId = context.getUserId().toString();
         String sessionId = context.getSessionId().toString();
         String modelName = errorContext.chatRequest().modelName();
         String errorMessage = errorContext.error().getMessage();
+        log.error("AI 请求失败 | 耗时: {}ms | 错误原因: {}", durationMs.toMillis(), errorContext.error().getMessage());
 
-        observabilityLogger.logError("LLM_ERROR", durationMs.toMillis(), errorMessage);
-
+        // 记录失败请求
         aiModelMetricsCollector.recordRequest(userId, sessionId, modelName, "error");
         aiModelMetricsCollector.recordError(userId, sessionId, modelName, errorMessage);
         aiModelMetricsCollector.recordResponseTime(userId, sessionId, modelName, durationMs);
